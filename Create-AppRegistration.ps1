@@ -1,345 +1,269 @@
-# PowerShell script to create an app registration with <>.Read. permissions
-# View-only permissions for to prompt the Microsoft Graph API for Security
-# Requires Microsoft.Graph PowerShell module
-
-#Requires -Modules Microsoft.Graph.Applications
+# PowerShell Script to Create App Registration with Identity & Security Read-Only Microsoft Graph API Permissions
+# Requires Microsoft.Graph PowerShell SDK
 
 param(
     [Parameter(Mandatory = $true)]
-    [string]$AppName,
+    [string]$AppDisplayName,
     
     [Parameter(Mandatory = $false)]
     [string]$TenantId,
     
     [Parameter(Mandatory = $false)]
-    [switch]$InteractiveAuth = $true
+    [switch]$GrantAdminConsent
 )
 
-# Function to write colored output
-function Write-ColorOutput($ForegroundColor) {
-    $fc = $host.UI.RawUI.ForegroundColor
-    $host.UI.RawUI.ForegroundColor = $ForegroundColor
-    
-    if ($args) {
-        Write-Output $args
-    } else {
-        $input | Write-Output
-    }
-    
-    $host.UI.RawUI.ForegroundColor = $fc
+# Import required modules
+try {
+    Import-Module Microsoft.Graph.Applications -Force
+    Import-Module Microsoft.Graph.Authentication -Force
+    Write-Host "+ Microsoft Graph modules imported successfully" -ForegroundColor Green
 }
+catch {
+    Write-Error "Failed to import Microsoft Graph modules. Please install using: Install-Module Microsoft.Graph"
+    exit 1
+}
+
+# Connect to Microsoft Graph with required scopes
+$RequiredScopes = @(
+    "Application.ReadWrite.All",
+    "AppRoleAssignment.ReadWrite.All"
+)
 
 try {
-    Write-ColorOutput Green "=== Microsoft Graph App Registration Creator ==="
-    Write-Host ""
-    
-    # Check if Microsoft.Graph module is installed
-    Write-ColorOutput Yellow "Checking Microsoft Graph PowerShell module..."
-    $graphModule = Get-Module -ListAvailable -Name Microsoft.Graph.Applications
-    
-    if (-not $graphModule) {
-        Write-ColorOutput Red "Microsoft.Graph.Applications module not found!"
-        Write-ColorOutput Yellow "Installing Microsoft Graph PowerShell module..."
-        Install-Module Microsoft.Graph -Scope CurrentUser -Force
-        Write-ColorOutput Green "Microsoft Graph module installed successfully."
-    } else {
-        Write-ColorOutput Green "Microsoft Graph module found."
-    }
-    
-    # Import required modules
-    Import-Module Microsoft.Graph.Applications
-    Import-Module Microsoft.Graph.Authentication
-    
-    # Connect to Microsoft Graph
-    Write-ColorOutput Yellow "Connecting to Microsoft Graph..."
-    
     if ($TenantId) {
-        if ($InteractiveAuth) {
-            Connect-MgGraph -TenantId $TenantId -Scopes "Application.ReadWrite.All", "Directory.Read.All" -NoWelcome
-        } else {
-            # For non-interactive scenarios, you would use certificate or client secret authentication
-            Write-ColorOutput Red "Non-interactive authentication requires additional setup (certificate or client secret)"
-            exit 1
-        }
+        Connect-MgGraph -Scopes $RequiredScopes -TenantId $TenantId
     } else {
-        if ($InteractiveAuth) {
-            Connect-MgGraph -Scopes "Application.ReadWrite.All", "Directory.Read.All" -NoWelcome
-        } else {
-            Write-ColorOutput Red "Non-interactive authentication requires TenantId and additional setup"
-            exit 1
-        }
+        Connect-MgGraph -Scopes $RequiredScopes
     }
-    
-    Write-ColorOutput Green "Successfully connected to Microsoft Graph."
-    
-    # Get Microsoft Graph service principal (for API permissions)
-    Write-ColorOutput Yellow "Getting Microsoft Graph service principal..."
-    $graphServicePrincipal = Get-MgServicePrincipal -Filter "appId eq '00000003-0000-0000-c000-000000000000'"
-    
-    if (-not $graphServicePrincipal) {
-        Write-ColorOutput Red "Failed to find Microsoft Graph service principal!"
-        exit 1
-    }
-    
-    # Define the required API permissions
-Write-ColorOutput Yellow "Defining API permissions..."
-
-    # Application.Read.All (Delegated) - ID: c79f8feb-a9db-4090-85f9-90d820caa0eb
-    # AuditLog.Read.All (Delegated) - ID: e4c9e354-4dc5-45b8-9e7c-e1393b0b1a20
-    # Directory.Read.All (Delegated) - ID: 06da0dbc-49e2-44d2-8312-53f166ab848a
-    # Policy.Read.All (Delegated) - ID: ba22922b-752c-446f-89d7-a2d92398fceb
-    # Policy.Read.AuthenticationMethod (Delegated) - ID: a6ff13ac-1851-4993-8ca9-a671d70de2d5
-    # Policy.Read.ConditionalAccess (Delegated) - ID: 633e0fce-8c58-4cfb-9495-12bbd5a24f7c
-    # Policy.Read.DeviceConfiguration (Delegated) - ID: 3616a4b0-6746-49c4-a678-4c237599074d
-    # Policy.Read.IdentityProtection (Delegated) - ID: d146432f-b803-4ed4-8d42-ba74193a6ede
-    # Policy.Read.PermissionGrant (Delegated) - ID: 414de6ea-2d92-462f-b120-6e2a809a6d01
-    # SecurityActions.Read.All (Delegated) - ID: 1638cddf-07a4-4de2-8645-69c96cacad73 
-    # SecurityAlert.Read.All (Delegated) - ID: bc257fb8-46b4-4b15-8713-01e91bfbe4ea
-    # SecurityAnalyzedMessage.Read.All (Delegated) - ID: 53e6783e-b127-4a35-ab3a-6a52d80a9077
-    # SecurityEvents.Read.All (Delegated) - ID: 64733abd-851e-478a-bffb-e47a14b18235
-    # SecurityIdentitiesAccount.Read.All (Delegated) - ID: 3e9ed69a-a48e-473c-8b97-413016703a37
-    # SecurityIdentitiesHealth.Read.All (Delegated) - ID: a0d0da43-a6df-4416-b63d-99c79991aae8
-    # SecurityIdentitiesSensors.Read.All (Delegated) - ID: 2c221239-7c5c-4b30-9355-d84663bfcd96
-    # SecurityIdentitiesUserActions.Read.All (Delegated) - ID: c7d0a939-da1c-4aca-80fa-d0a6cd924801
-    # SecurityIncident.Read.All (Delegated) - ID: b9abcc4f-94fc-4457-9141-d20ce80ec952
-    # User.Read (delegated) - ID: e1fe6dd8-ba31-4d61-89e7-88639da4683d
-    # User.Read.All (delegated) - ID: a154be20-db9c-4678-8ab7-66f6cc099a59
-    # UserAuthenticationMethod.Read.All (Delegated) - ID: aec28ec7-4d02-4e8c-b864-50163aea77eb
-
-    $ApplicationReadAllPermission = $graphServicePrincipal.Oauth2PermissionScopes | Where-Object { $_.Value -eq "Application.Read.All" }
-    $AuditLogReadAllPermission = $graphServicePrincipal.Oauth2PermissionScopes | Where-Object { $_.Value -eq "AuditLog.Read.All" }
-    $PolicyReadAllPermission = $graphServicePrincipal.Oauth2PermissionScopes | Where-Object { $_.Value -eq "Directory.Read.All" }
-    $userReadAllPermission = $graphServicePrincipal.Oauth2PermissionScopes | Where-Object { $_.Value -eq "Policy.Read.All" }
-    $PolicyReadAuthenticationMethodPermission = $graphServicePrincipal.Oauth2PermissionScopes | Where-Object { $_.Value -eq "Policy.Read.AuthenticationMethod" }
-    $PolicyReadConditionalAccessPermission = $graphServicePrincipal.Oauth2PermissionScopes | Where-Object { $_.Value -eq "Policy.Read.ConditionalAccess" }
-    $PolicyReadDeviceConfigurationPermission = $graphServicePrincipal.Oauth2PermissionScopes | Where-Object { $_.Value -eq "Policy.Read.DeviceConfiguration" }
-    $PolicyReadIdentityProtectionPermission = $graphServicePrincipal.Oauth2PermissionScopes | Where-Object { $_.Value -eq "Policy.Read.IdentityProtection" }
-    $PolicyReadPermissionGrantPermission = $graphServicePrincipal.Oauth2PermissionScopes | Where-Object { $_.Value -eq "Policy.Read.PermissionGrant" }
-    $SecurityActionsReadAllPermission = $graphServicePrincipal.Oauth2PermissionScopes | Where-Object { $_.Value -eq "SecurityActions.Read.All" }
-    $SecurityAlertReadAllPermission = $graphServicePrincipal.Oauth2PermissionScopes | Where-Object { $_.Value -eq "SecurityAlert.Read.All" }
-    $SecurityAnalyzedMessageReadAllPermission = $graphServicePrincipal.Oauth2PermissionScopes | Where-Object { $_.Value -eq "SecurityAnalyzedMessage.Read.All" }
-    $SecurityEventsReadAllPermission = $graphServicePrincipal.Oauth2PermissionScopes | Where-Object { $_.Value -eq "SecurityEvents.Read.All" }
-    $SecurityIdentitiesAccountReadAllPermission = $graphServicePrincipal.Oauth2PermissionScopes | Where-Object { $_.Value -eq "SecurityIdentitiesAccount.Read.All" }
-    $SecurityIdentitiesHealthReadAllPermission = $graphServicePrincipal.Oauth2PermissionScopes | Where-Object { $_.Value -eq "SecurityIdentitiesHealth.Read.All" }
-    $SecurityIdentitiesSensorsReadAllPermission = $graphServicePrincipal.Oauth2PermissionScopes | Where-Object { $_.Value -eq "SecurityIdentitiesSensors.Read.All" }
-    $SecurityIdentitiesUserActionsReadAllPermission = $graphServicePrincipal.Oauth2PermissionScopes | Where-Object { $_.Value -eq "SecurityIdentitiesUserActions.Read.All" }
-    $SecurityIncidentReadAllPermission = $graphServicePrincipal.Oauth2PermissionScopes | Where-Object { $_.Value -eq "SecurityIncident.Read.All" }
-    $userReadPermission = $graphServicePrincipal.Oauth2PermissionScopes | Where-Object { $_.Value -eq "User.Read" }
-    $userReadAllPermission = $graphServicePrincipal.Oauth2PermissionScopes | Where-Object { $_.Value -eq "User.Read.All" }
-    $UserAuthenticationMethodReadAllPermission = $graphServicePrincipal.Oauth2PermissionScopes | Where-Object { $_.Value -eq "UserAuthenticationMethod.Read.All" }
-
-    if (-not $ApplicationReadAllPermission -or -not $AuditLogReadAllPermission -or -not $PolicyReadAllPermission -or -not $userReadAllPermission -or -not $PolicyReadAuthenticationMethodPermission -or -not $PolicyReadConditionalAccessPermission -or -not $PolicyReadDeviceConfigurationPermission -or -not $PolicyReadIdentityProtectionPermission -or -not $PolicyReadPermissionGrantPermission -or -not $SecurityActionsReadAllPermission -or -not $SecurityAlertReadAllPermission -or -not $SecurityAnalyzedMessageReadAllPermission -or -not $SecurityEventsReadAllPermission -or -not $SecurityIdentitiesAccountReadAllPermission -or -not $SecurityIdentitiesHealthReadAllPermission -or -not $SecurityIdentitiesSensorsReadAllPermission -or -not $SecurityIdentitiesUserActionsReadAllPermission -or -not $SecurityIncidentReadAllPermission -or -not $userReadPermission -or -not $userReadAllPermission -or -not $UserAuthenticationMethodReadAllPermission) {
-        Write-ColorOutput Red "Failed to find required permissions in Microsoft Graph!"
-        Write-ColorOutput Yellow "Available OAuth2 permissions:"
-        $graphServicePrincipal.Oauth2PermissionScopes | Select-Object Value, Id | Format-Table
-        exit 1
-    }
-    
-    Write-ColorOutput Green "Found required permissions:"
-    Write-Host "  - Application.Read.All (Delegated): $($ApplicationReadAllPermission.Id)"
-    Write-Host "  - AuditLog.Read.All (Delegated): $($AuditLogReadAllPermission.Id)"
-    Write-Host "  - Directory.Read.All (Delegated): $($PolicyReadAllPermission.Id)"
-    Write-Host "  - Policy.Read.All (Delegated): $($userReadAllPermission.Id)"
-    Write-Host "  - Policy.Read.AuthenticationMethod (Delegated): $($PolicyReadAuthenticationMethodPermission.Id)"
-    Write-Host "  - Policy.Read.ConditionalAccess (Delegated): $($PolicyReadConditionalAccessPermission.Id)"
-    Write-Host "  - Policy.Read.DeviceConfiguration (Delegated): $($PolicyReadDeviceConfigurationPermission.Id)"
-    Write-Host "  - Policy.Read.IdentityProtection (Delegated): $($PolicyReadIdentityProtectionPermission.Id)"
-    Write-Host "  - Policy.Read.PermissionGrant (Delegated): $($PolicyReadPermissionGrantPermission.Id)"
-    Write-Host "  - SecurityActions.Read.All (Delegated): $($SecurityActionsReadAllPermission.Id)"
-    Write-Host "  - SecurityAlert.Read.All (Delegated): $($SecurityAlertReadAllPermission.Id)"
-    Write-Host "  - SecurityAnalyzedMessage.Read.All (Delegated): $($SecurityAnalyzedMessageReadAllPermission.Id)"
-    Write-Host "  - SecurityEvents.Read.All (Delegated): $($SecurityEventsReadAllPermission.Id)"
-    Write-Host "  - SecurityIdentitiesAccount.Read.All (Delegated): $($SecurityIdentitiesAccountReadAllPermission.Id)"
-    Write-Host "  - SecurityIdentitiesHealth.Read.All (Delegated): $($SecurityIdentitiesHealthReadAllPermission.Id)"
-    Write-Host "  - SecurityIdentitiesSensors.Read.All (Delegated): $($SecurityIdentitiesSensorsReadAllPermission.Id)"
-    Write-Host "  - SecurityIdentitiesUserActions.Read.All (Delegated): $($SecurityIdentitiesUserActionsReadAllPermission.Id)"
-    Write-Host "  - SecurityIncident.Read.All (Delegated): $($SecurityIncidentReadAllPermission.Id)"
-    Write-Host "  - User.Read (Delegated): $($UserReadPermission.Id)"
-    Write-Host "  - User.Read.All (Delegated): $($UserReadAllPermission.Id)"
-    Write-Host "  - UserAuthenticationMethod.Read.All (Delegated): $($UserAuthenticationMethodReadAllPermission.Id)"
-
-    # Create the application registration
-    Write-ColorOutput Yellow "Creating application registration: $AppName"
-    
-    $appRegistration = @{
-        DisplayName = $AppName
-        Description = "App registration created via PowerShell with User.Read and User.Read.All permissions"
-        SignInAudience = "AzureADMyOrg"  # Single tenant
-        RequiredResourceAccess = @(
-            @{
-                ResourceAppId = "00000003-0000-0000-c000-000000000000"  # Microsoft Graph
-                ResourceAccess = @(
-                    @{
-                        Id = $AuditLogReadAllPermission.Id
-                        Type = "Scope"  # Delegated permission
-                    },
-                    @{
-                        Id = $PolicyReadAllPermission.Id
-                        Type = "Scope"  # Delegated permission
-                    },
-                    @{
-                        Id = $UserReadAllPermission.Id
-                        Type = "Scope"  # Delegated permission
-                    },
-                    @{
-                        Id = $PolicyReadAuthenticationMethodPermission.Id
-                        Type = "Scope"  # Delegated permission
-                    },
-                    @{
-                        Id = $PolicyReadConditionalAccessPermission.Id
-                        Type = "Scope"  # Delegated permission
-                    },
-                    @{
-                        Id = $PolicyReadDeviceConfigurationPermission.Id
-                        Type = "Scope"  # Delegated permission
-                    },
-                    @{
-                        Id = $PolicyReadIdentityProtectionPermission.Id
-                        Type = "Scope"  # Delegated permission
-                    },
-                    @{
-                        Id = $PolicyReadPermissionGrantPermission.Id
-                        Type = "Scope"  # Delegated permission
-                    },
-                    @{
-                        Id = $SecurityActionsReadAllPermission.Id
-                        Type = "Scope"  # Delegated permission
-                    },
-                    @{
-                        Id = $SecurityAlertReadAllPermission.Id
-                        Type = "Scope"  # Delegated permission
-                    },
-                    @{
-                        Id = $SecurityAnalyzedMessageReadAllPermission.Id
-                        Type = "Scope"  # Delegated permission
-                    },
-                    @{
-                        Id = $SecurityEventsReadAllPermission.Id
-                        Type = "Scope"  # Delegated permission
-                    },
-                    @{
-                        Id = $SecurityIdentitiesAccountReadAllPermission.Id
-                        Type = "Scope"  # Delegated permission
-                    },
-                    @{
-                        Id = $SecurityIdentitiesHealthReadAllPermission.Id
-                        Type = "Scope"  # Delegated permission
-                    },
-                    @{
-                        Id = $SecurityIdentitiesSensorsReadAllPermission.Id
-                        Type = "Scope"  # Delegated permission
-                    },
-                    @{
-                        Id = $SecurityIdentitiesUserActionsReadAllPermission.Id
-                        Type = "Scope"  # Delegated permission
-                    },
-                    @{
-                        Id = $SecurityIncidentReadAllPermission.Id
-                        Type = "Scope"  # Delegated permission
-                    },
-                    @{
-                        Id = $UserReadPermission.Id
-                        Type = "Scope"  # Delegated permission
-                    },
-                    @{
-                        Id = $UserReadAllPermission.Id
-                        Type = "Scope"  # Delegated permission
-                    },
-                    @{
-                        Id = $UserAuthenticationMethodReadAllPermission.Id
-                        Type = "Scope"  # Delegated permission
-                    }
-      
-                )
-            }
-        )
-        Web = @{
-            RedirectUris = @("https://localhost:8080/auth/callback")
-            ImplicitGrantSettings = @{
-                EnableAccessTokenIssuance = $false
-                EnableIdTokenIssuance = $false
-            }
-        }
-        PublicClient = @{
-            RedirectUris = @("http://localhost")
-        }
-    }
-    
-    # Create the application
-    $app = New-MgApplication -BodyParameter $appRegistration
-    
-    Write-ColorOutput Green "Application registration created successfully!"
-    Write-Host ""
-    Write-ColorOutput Cyan "=== Application Details ==="
-    Write-Host "Application Name: $($app.DisplayName)"
-    Write-Host "Application ID: $($app.AppId)"
-    Write-Host "Object ID: $($app.Id)"
-    Write-Host "Created: $($app.CreatedDateTime)"
-    Write-Host ""
-    
-    # Create a client secret (optional)
-    Write-Host "Do you want to create a client secret? (y/N): " -NoNewline
-    $createSecret = Read-Host
-    
-    if ($createSecret -eq 'y' -or $createSecret -eq 'Y') {
-        Write-ColorOutput Yellow "Creating client secret..."
-        
-        $secretParams = @{
-            PasswordCredential = @{
-                DisplayName = "PowerShell Generated Secret"
-                EndDateTime = (Get-Date).AddYears(1)  # 1 year expiration
-            }
-        }
-        
-        $secret = Add-MgApplicationPassword -ApplicationId $app.Id -BodyParameter $secretParams
-        
-        Write-ColorOutput Green "Client secret created successfully!"
-        Write-ColorOutput Red "IMPORTANT: Save this client secret value - it won't be shown again!"
-        Write-Host ""
-        Write-ColorOutput Cyan "=== Client Secret Details ==="
-        Write-Host "Secret ID: $($secret.KeyId)"
-        Write-Host "Secret Value: $($secret.SecretText)"
-        Write-Host "Expires: $($secret.EndDateTime)"
-        Write-Host ""
-        Write-ColorOutput Red "Store the secret value securely - you won't be able to retrieve it later!"
-    }
-    
-    # Create service principal (for admin consent)
-    Write-ColorOutput Yellow "Creating service principal..."
-    try {
-        $servicePrincipal = New-MgServicePrincipal -AppId $app.AppId
-        Write-ColorOutput Green "Service principal created successfully!"
-        Write-Host "Service Principal ID: $($servicePrincipal.Id)"
-    } catch {
-        Write-ColorOutput Red "Failed to create service principal: $($_.Exception.Message)"
-    }
-    
-    Write-Host ""
-    Write-ColorOutput Cyan "=== Next Steps ==="
-    Write-Host "1. Admin consent may be required for User.Read.All permissions"
-    Write-Host "2. Go to Azure Portal > App registrations > $AppName > API permissions"
-    Write-Host "3. Click 'Grant admin consent for [your organization]'"
-    Write-Host "4. The application is now ready to use!"
-    Write-Host ""
-    Write-ColorOutput Yellow "Azure Portal URL:"
-    Write-Host "https://portal.azure.com/#view/Microsoft_AAD_RegisteredApps/ApplicationMenuBlade/~/Overview/appId/$($app.AppId)"
-    
-} catch {
-    Write-ColorOutput Red "Error occurred: $($_.Exception.Message)"
-    Write-ColorOutput Red "Stack trace: $($_.ScriptStackTrace)"
+    Write-Host "+ Successfully connected to Microsoft Graph" -ForegroundColor Green
+}
+catch {
+    Write-Error "Failed to connect to Microsoft Graph: $($_.Exception.Message)"
     exit 1
-} finally {
-    # Disconnect from Microsoft Graph
+}
+
+# Microsoft Graph Service Principal ID (constant across all tenants)
+$GraphServicePrincipalId = "00000003-0000-0000-c000-000000000000"
+
+# Define comprehensive read-only identity and security Microsoft Graph permissions
+$IdentitySecurityPermissions = @{
+    # User and Profile Management
+    "User.Read.All" = "df021288-bdef-4463-88db-98f22de89214"
+    "User.ReadBasic.All" = "97235f07-e226-4f63-ace3-39588e11d3a1"
+    "UserAuthenticationMethod.Read.All" = "38d9df27-64da-44fd-b7c5-a6fbac20248f"
+    
+    # Directory and Organization
+    "Directory.Read.All" = "7ab1d382-f21e-4acd-a863-ba3e13f7da61"
+    "Organization.Read.All" = "498476ce-e0fe-48b0-b801-37ba7e2685c6"
+    "AdministrativeUnit.Read.All" = "134fd756-38ce-4afd-ba33-e9623dbe66c2"
+    
+    # Group Management
+    "Group.Read.All" = "5b567255-7703-4780-807c-7be8301ae99b"
+    "GroupMember.Read.All" = "98830695-27a2-44f7-8c18-0c3ebc9698f6"
+    
+    # Application and Service Principal Management
+    "Application.Read.All" = "9a5d68dd-52b0-4cc2-bd40-abcf44ac3a30"
+    "ServicePrincipalEndpoint.Read.All" = "5256681e-b7f6-40c0-8447-2d9db68797a0"
+    
+    # Role and Permission Management
+    "RoleManagement.Read.All" = "c7fbd983-d9aa-4fa7-84b8-17382c103bc4"
+    "DelegatedPermissionGrant.Read.All" = "81b4724a-58aa-41c1-8a55-84ef97466587"
+    
+    # Device Management
+    "Device.Read.All" = "7438b122-aefc-4978-80ed-43db9fcc7715"
+    "DeviceManagementConfiguration.Read.All" = "dc377aa6-52d8-4e23-b271-2a7ae04cedf3"
+    "DeviceManagementApps.Read.All" = "7a6ee1e7-141e-4cec-ae74-d9db155731ff"
+    "DeviceManagementManagedDevices.Read.All" = "2f51be20-0bb4-4fed-bf7b-db946066c75e"
+    
+    # Security and Threat Protection
+    "SecurityEvents.Read.All" = "bf394140-e372-4bf9-a898-299cfc7564e5"
+    "SecurityActions.Read.All" = "5e0edab9-c148-49d0-b423-ac253e121825"
+    "SecurityAlert.Read.All" = "472e4a4d-bb4a-4026-98d1-0b0d74cb74a5"
+    
+    # Audit and Reporting
+    "AuditLog.Read.All" = "b0afded3-3588-46d8-8b3d-9842eff778da"    
+    "ReportSettings.Read.All" = "ee353f83-55ef-4b78-82da-555bfa2b4b95"
+    "Reports.Read.All" = "230c1aed-a721-4c5d-9cb4-a90514e508ef"
+    
+    # Identity Protection and Risk Management
+    "IdentityRiskEvent.Read.All" = "6e472fd1-ad78-48da-a0f0-97ab2c6b769e"
+    "IdentityRiskyUser.Read.All" = "dc5007c0-2d7d-4c42-879c-2dab87571379"
+    "IdentityRiskyServicePrincipal.Read.All" = "607c7344-0eed-41e5-823a-9695ebe1b7b0"
+    
+    # Conditional Access
+    "Policy.Read.All" = "246dd0d5-5bd0-4def-940b-0421030a5b68"
+    "Policy.Read.ConditionalAccess" = "37730810-e9ba-4e46-b07e-8ca78d182097"
+    
+    # Access Reviews
+    "AccessReview.Read.All" = "d07a8cc0-3d51-4b77-b3b0-32704d1f69fa"
+    
+    # Privileged Identity Management
+    "PrivilegedAccess.Read.AzureAD" = "4cdc2547-9148-4295-8d11-be0db1391d6b"
+    
+    # Compliance and Information Protection
+    "InformationProtectionPolicy.Read.All" = "19da66cb-0fb0-4390-b071-ebc76a349482"
+    "ThreatAssessment.Read.All" = "f8f035bb-2cce-47fb-8bf5-7baf3ecbee48"
+    
+    # Authentication Context and Methods
+    "AuthenticationContext.Read.All" = "381f742f-e1f8-4309-b4ab-e3d91ae4c5c1"
+    
+    # Sign-in Logs
+    "AuditLogsQuery.Read.All" = "5e1e9171-754d-478c-812c-f1755a9a4c2d"
+    "AuditLogsQuery-Entra.Read.All" = "7276d950-48fc-4269-8348-f22f2bb296d0"
+}
+
+# Create application registration
+try {
+    Write-Host "Creating app registration: $AppDisplayName" -ForegroundColor Yellow
+    
+    $AppRegistration = New-MgApplication -DisplayName $AppDisplayName -Description "Identity and Security Read-Only Application"
+    
+    Write-Host "+ App registration created successfully" -ForegroundColor Green
+    Write-Host "  - Application ID: $($AppRegistration.AppId)" -ForegroundColor Cyan
+    Write-Host "  - Object ID: $($AppRegistration.Id)" -ForegroundColor Cyan
+}
+catch {
+    Write-Error "Failed to create app registration: $($_.Exception.Message)"
+    exit 1
+}
+
+# Get Microsoft Graph Service Principal
+try {
+    $GraphServicePrincipal = Get-MgServicePrincipal -Filter "AppId eq '$GraphServicePrincipalId'"
+    if (-not $GraphServicePrincipal) {
+        throw "Microsoft Graph service principal not found"
+    }
+    Write-Host "+ Found Microsoft Graph service principal" -ForegroundColor Green
+}
+catch {
+    Write-Error "Failed to get Microsoft Graph service principal: $($_.Exception.Message)"
+    exit 1
+}
+
+# Prepare required resource access for Microsoft Graph
+$RequiredResourceAccess = @{
+    ResourceAppId = $GraphServicePrincipalId
+    ResourceAccess = @()
+}
+
+# Add each permission to the required resource access
+foreach ($Permission in $IdentitySecurityPermissions.GetEnumerator()) {
+    $RequiredResourceAccess.ResourceAccess += @{
+        Id = $Permission.Value
+        Type = "Role"  # Application permission
+    }
+    Write-Host "  + Added permission: $($Permission.Key)" -ForegroundColor Gray
+}
+
+# Update app registration with required permissions
+try {
+    Write-Host "Configuring Microsoft Graph API permissions..." -ForegroundColor Yellow
+    
+    Update-MgApplication -ApplicationId $AppRegistration.Id -RequiredResourceAccess @($RequiredResourceAccess)
+    
+    Write-Host "+ Permissions configured successfully" -ForegroundColor Green
+}
+catch {
+    Write-Error "Failed to configure permissions: $($_.Exception.Message)"
+    exit 1
+}
+
+# Create service principal for the application
+try {
+    Write-Host "Creating service principal..." -ForegroundColor Yellow
+    
+    $ServicePrincipal = New-MgServicePrincipal -AppId $AppRegistration.AppId
+    
+    Write-Host "+ Service principal created" -ForegroundColor Green
+    Write-Host "  - Service Principal ID: $($ServicePrincipal.Id)" -ForegroundColor Cyan
+}
+catch {
+    Write-Error "Failed to create service principal: $($_.Exception.Message)"
+    exit 1
+}
+
+# Grant admin consent if requested
+if ($GrantAdminConsent) {
     try {
-        Disconnect-MgGraph | Out-Null
-        Write-ColorOutput Yellow "Disconnected from Microsoft Graph."
-    } catch {
-        # Ignore disconnect errors
+        Write-Host "Granting admin consent for application permissions..." -ForegroundColor Yellow
+        
+        foreach ($Permission in $IdentitySecurityPermissions.GetEnumerator()) {
+            $AppRoleId = $Permission.Value
+            
+            # Check if the app role assignment already exists
+            $ExistingAssignment = Get-MgServicePrincipalAppRoleAssignment -ServicePrincipalId $ServicePrincipal.Id | 
+                Where-Object { $_.AppRoleId -eq $AppRoleId -and $_.ResourceId -eq $GraphServicePrincipal.Id }
+            
+            if (-not $ExistingAssignment) {
+                try {
+                    New-MgServicePrincipalAppRoleAssignment `
+                        -ServicePrincipalId $ServicePrincipal.Id `
+                        -PrincipalId $ServicePrincipal.Id `
+                        -ResourceId $GraphServicePrincipal.Id `
+                        -AppRoleId $AppRoleId
+                    
+                    Write-Host "    + Granted: $($Permission.Key)" -ForegroundColor Gray
+                }
+                catch {
+                    Write-Warning "Failed to grant permission $($Permission.Key): $($_.Exception.Message)"
+                }
+            }
+            else {
+                Write-Host "    * Already granted: $($Permission.Key)" -ForegroundColor Gray
+            }
+        }
+        
+        Write-Host "+ Admin consent process completed" -ForegroundColor Green
+    }
+    catch {
+        Write-Warning "Failed to grant some permissions. You may need to grant admin consent manually in the Azure portal."
     }
 }
 
-Write-ColorOutput Green "Script completed successfully!"
 
-# Example usage:
-# .\Create-AppRegistration.ps1 -AppName "MyTestApp"
-# .\Create-AppRegistration.ps1 -AppName "MyTestApp" -TenantId "your-tenant-id"
+# Display summary information
+Write-Host "`n" + "="*80 -ForegroundColor Cyan
+Write-Host "APP REGISTRATION SUMMARY" -ForegroundColor Cyan
+Write-Host "="*80 -ForegroundColor Cyan
+Write-Host "Application Name: $AppDisplayName" -ForegroundColor White
+Write-Host "Application ID: $($AppRegistration.AppId)" -ForegroundColor White
+Write-Host "Object ID: $($AppRegistration.Id)" -ForegroundColor White
+Write-Host "Service Principal ID: $($ServicePrincipal.Id)" -ForegroundColor White
+Write-Host "Tenant ID: $((Get-MgContext).TenantId)" -ForegroundColor White
+Write-Host "`nPermissions Configured: $($IdentitySecurityPermissions.Count) Microsoft Graph application permissions" -ForegroundColor White
+
+if (-not $GrantAdminConsent) {
+    Write-Host "`n! IMPORTANT: Admin consent is required!" -ForegroundColor Yellow
+    Write-Host "To grant admin consent, visit:" -ForegroundColor Yellow
+    Write-Host "https://portal.azure.com/#view/Microsoft_AAD_RegisteredApps/ApplicationMenuBlade/~/CallAnAPI/appId/$($AppRegistration.AppId)" -ForegroundColor Yellow
+}
+
+Write-Host "`nNEXT STEPS:" -ForegroundColor Cyan
+Write-Host "1. Create a client secret or certificate for authentication" -ForegroundColor White
+Write-Host "2. Grant admin consent for all permissions (if not done already)" -ForegroundColor White
+Write-Host "3. Test the application with the assigned permissions" -ForegroundColor White
+Write-Host "4. Review and remove any unused permissions following least privilege principle" -ForegroundColor White
+
+Write-Host "`nPERMISSION CATEGORIES INCLUDED:" -ForegroundColor Cyan
+Write-Host "* User and Profile Management (3 permissions)" -ForegroundColor White
+Write-Host "* Directory and Organization (3 permissions)" -ForegroundColor White
+Write-Host "* Group Management (2 permissions)" -ForegroundColor White
+Write-Host "* Application Management (2 permissions)" -ForegroundColor White
+Write-Host "* Role and Permission Management (2 permissions)" -ForegroundColor White
+Write-Host "* Device Management (4 permissions)" -ForegroundColor White
+Write-Host "* Security and Threat Protection (6 permissions)" -ForegroundColor White
+Write-Host "* Audit and Reporting (3 permissions)" -ForegroundColor White
+Write-Host "* Identity Protection and Risk (3 permissions)" -ForegroundColor White
+Write-Host "* Conditional Access and Policies (2 permissions)" -ForegroundColor White
+Write-Host "* Access Reviews (1 permission)" -ForegroundColor White
+Write-Host "* Privileged Identity Management (2 permissions)" -ForegroundColor White
+Write-Host "* Compliance and Information Protection (2 permissions)" -ForegroundColor White
+Write-Host "* Custom Security Attributes (2 permissions)" -ForegroundColor White
+Write-Host "* Entitlement Management (1 permission)" -ForegroundColor White
+Write-Host "* Audit Logs Query (2 permissions)" -ForegroundColor White
+
+Write-Host "`n" + "="*80 -ForegroundColor Cyan
+
+# Disconnect from Microsoft Graph
+Disconnect-MgGraph | Out-Null
+Write-Host "+ Disconnected from Microsoft Graph" -ForegroundColor Green
